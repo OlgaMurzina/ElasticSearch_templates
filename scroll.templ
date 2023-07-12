@@ -1,1 +1,412 @@
+-------------------
+# TXT
+-------------------
+/*
+* This is a template for power bi query to elastic search with scroll
+* How to use:
+* 1. replace [elasticsearch server address] with the actuall address in two places:
+     in the initial url and in the scroll url
+* 2. replace [Your index goes here] with the actual index
+* 3. replace if needed the size in bothe the initial url body and in the recusive call (important) now it is set to 10k
+* 4. replace if needed the limit parameter
+* Notes:
+* 1. "" quotes in powerbi are """" (double double quotes)
+* 2. To make a recursive call with in a function you need to use @
+* 3. I suggest excluding field you dont need in the elastic search query by adding excludes to initialURLBody
+* 4. I suggest giving an order for faster fetch by adding sort field to initialURLBody
+* 5. Recursive calls are expensive on the machine need a strong machine
+*/
+
+let
+    limit = 300000,
+    intialURL = "http://[elasticsearch server address]/[Your index goes here]/_search?scroll=1m",
+    initalURLBody = "{""size"": 10000,
+                      ""query"": {""match_all"":{}}, }",  
+    scrollURL = "http://[elasticsearch server address]/_search/scroll", 
+    scrollBodyStart = "{""scroll"":""1m"",""scroll_id"":""",
+    scrollBodyEnd = """}",
+
+        // Defining rcursive function
+        Source = let   RecursiveElasticFetch = (url, body, fetched ) =>
+    let
+     // the actual web call add headers with date time for preventing cached results 
+     Results = Json.Document(Web.Contents(url, [Content = Text.ToBinary(body) , Headers=[MyHeader=Text.From(DateTime.LocalNow())]])),
+     // create table from results
+     ParsedResults = Table.FromList(Results[hits][hits], Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+     
+     //stop condition
+     Return = if (List.IsEmpty(Results[hits][hits]) or (fetched >= limit)) then
+             ParsedResults
+         else
+             //recursive call (we have more data note how we add the scroll note how we build the scroll body)
+             ParsedResults & @RecursiveElasticFetch(scrollURL, scrollBodyStart&Results[_scroll_id]&scrollBodyEnd, fetched + 10000)
+    in
+        Return
+in
+    RecursiveElasticFetch(intialURL, initalURLBody, 0)
+
+-------------------
+# PY
+-------------------
+import elasticsearch
+
+
+def scroll_query(es, index, query):
+    """
+    :param es: an elasticsearch client object created with elasticsearch.Elasticsearch()
+    :param index: the name of the log to query (e.g. 'conn', 'timetohello', etc.)
+    :param query: elasticsearch query (docs on elastic.co)
+    :return: iterator containing results of elastic query
+    """
+    page = es.search(index=index, scroll='2m', size=10, body=query)
+    sid = page['_scroll_id']
+    scroll_size = page['hits']['total']
+
+    while (scroll_size > 0):
+        page = es.scroll(scroll_id=sid, scroll='2m')
+        sid = page['_scroll_id']
+        scroll_size = len(page['hits']['hits'])
+
+        for res in page['hits']['hits']:
+            yield res['_source']
+     
+
+# Example usage
+if __name__ == '__main__':
+    es_client = elasticsearch.Elasticsearch([ELASTIC_ENDPOINT]) #Replace with your elastic endpoint
+    
+    lookup = {
+        'query': {
+            'term': {'id_resp_h': '8.8.8.8'}
+        }
+    }
+
+    for res in scroll_query(es_client, 'conn', lookup):
+        print(res)
+
+
+-------------------
+# PY
+-------------------
+all_data = []
+
+# Process hits here
+def process_hits(hits):
+    for item in hits:
+        all_data.append(item)
+
+
+def fetch_data(url,index,scroll_time,query,rt_df=True):
+    try:
+        """
+        url: Elastic Cluster url
+        index: elastic index name
+        scroll_time: batch time to fetch records from elastic e.g 2m 
+        rtype is flexible by default its rtype is pandas dataframe or it can be list by passing rt_df = False
+        """
+
+        # Import lib
+        import pandas as pd
+        from elasticsearch import Elasticsearch
+
+        # Make Connection to your elastic cluster
+        es = Elasticsearch([url])
+
+        # config work
+        size = 1000
+
+        # Init scroll by search
+        data = es.search(
+            index=index,
+            scroll=scroll_time,
+            size=size,
+            body=query
+        )
+
+        # Get the scroll ID
+        sid = data['_scroll_id']
+        scroll_size = len(data['hits']['hits'])
+
+        while scroll_size > 0:
+            "Scrolling..."
+
+            # Before scroll, process current batch of hits
+            process_hits(data['hits']['hits'])
+
+            data = es.scroll(scroll_id=sid, scroll=scroll_time)
+
+            # Update the scroll ID
+            sid = data['_scroll_id']
+
+            # Get the number of results that returned in the last scroll
+            scroll_size = len(data['hits']['hits'])
+
+        # Check return type
+        if rt_df:
+            return pd.concat(map(pd.DataFrame.from_dict, all_data), axis=1)['_source'].T
+
+        return all_data
+    
+    except Exception as e:
+        return str(e)
+
+
+## Define your params here
+url = 'url.com'
+
+query={
+"size":10000,
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "range": {
+            "elktime": {
+              "gte": "2020-04-19T00:00:00.000-04:00",
+              "lte": "2020-04-19T23:59:00.000-04:00"
+            }
+          }
+        },
+          {
+              "match":{
+                  "ingestionStatus":"LOADED"
+              }
+
+          }
+      ]
+    }
+  }
+}
+
+# Execution
+
+elastic_df = fetch_data(url = url,index='index',scroll_time='2m',query=query)
+print(len(elastic_df))
+
+
+-------------------
+# PHP
+-------------------
+$search = $client->search([
+                'search_type' => 'scan',
+                'scroll'      => '1m',
+                'size'        => 1000,
+                'index'       => $currentIndex,
+                'sort'        => ['_doc'],
+                'body'        => [
+                    'query' => [
+                        $query
+                    ]
+                ]
+            ]);
+
+            $scrollId = $search['_scroll_id'];
+
+            while (true) {
+                $response = $client->scroll([
+                    'scroll_id' => $scrollId,
+                    'scroll' => '1m',
+                ]);
+
+                if (! count($response['hits']['hits'])) {
+                    break;
+                }
+
+                $scrollId = $response['_scroll_id'];
+
+                $results = array_map(function ($result) {
+                    return ['create' => $result['_source']];
+                }, $response['hits']['hits']);
+
+
+                $client->bulk([
+                    'index' => $index,
+                    'type'  => $type,
+                    'body'  => $results,
+                ]);
+            }
+
+            if ($scrollId == $search['_scroll_id']) {
+                break;
+            }
+        }
+
+
+-------------------
+# SCALA
+-------------------
+using System;
+using PlainElastic.Net;
+using PlainElastic.Net.Queries;
+using PlainElastic.Net.Serialization;
+
+namespace PlainElasticScrolling
+{
+    class Program
+    {
+        static void Main()
+        {
+            var connection = new ElasticConnection("localhost", 9200);
+            var serializer = new JsonNetSerializer();
+
+
+            // Add a sample documents to index.
+            for (int i = 1; i <= 100; i++)
+            {
+                var note = new Note {Caption = "Test Note " + i, Text = "Note to test scrolling"};
+                string noteJson = serializer.ToJson(note);
+                connection.Put(Commands.Index("notes", "note", i.ToString()), noteJson);
+            }
+
+            // Create query to scroll.
+            string query = new QueryBuilder<Note>()
+                .Query(q => q
+                    .MatchAll()
+                 )
+                 .Size(1)  // Note: actual hits count per each scroll request will be "Size" multiplied by the number of primary shards. (e.g. 1 * 5 shards = 5)
+                .BuildBeautified();
+
+            Console.WriteLine("QUERY: \r\n" + query);
+
+            // Execute scroll query with 5m keep alive time.
+            string results = connection.Post(Commands.Search("notes", "note").Scroll("5m").SearchType(SearchType.scan), query);
+            var scrollResults = serializer.ToSearchResult<Note>(results);
+
+            // Get the initial scroll ID
+            string scrollId = scrollResults._scroll_id;
+
+            Console.WriteLine("\r\nScrolling results: \r\n");
+
+            do
+            {
+                // Execute SearchScroll request to scroll found documents.
+                results = connection.Get(Commands.SearchScroll(scrollId).Scroll("5m"));
+                scrollResults = serializer.ToSearchResult<Note>(results);
+
+                foreach (var note in scrollResults.Documents)
+                    Console.WriteLine(note.Caption);
+
+                // Update scroll ID 
+                scrollId = scrollResults._scroll_id;
+
+            // We should wait till no hits has been returned to stop scrolling.
+            } while (scrollResults.hits.hits.Length > 0);
+
+            Console.WriteLine("\r\nDone");
+            Console.ReadKey();
+        }
+    }
+
+
+    public class Note
+    {
+        public string Caption { get; set; }
+        public string Text { get; set; }
+    }
+
+}
+
+-------------------
+# JS
+-------------------
+async function elasticSearchWithScrollData(
+  elasticIndexName,
+  elasticType,
+  elasticQuery
+) {
+  let client = await elasticClient();
+  var { _scroll_id, response } = await esclient.search({
+    index: elasticIndexName,
+    type: elasticType,
+    scroll: "10s",
+    body: elasticQuery,
+  });
+  return [_scroll_id, response];
+}
+
+-------------------
+# JS
+-------------------
+client.js
+const elasticClient = require( "elasticsearch" );
+//  Set global base url for later use in importing scripts
+const path = require("path");
+const config = require( path.join( __dirname, "config" ) );
+/*
+ *  ElasticSearch init section
+ */
+const ESClient = new elasticClient.Client( {
+    host: config.esHosts,
+    requestTimeout: 1000 * 60 * 60,
+    keepAlive: true,
+    // log: 'debug',
+
+} );
+// ping the cluster
+ESClient.ping( {
+    requestTimeout: 30000
+}, function( error ) {
+    if ( error ) {
+        console.error( "elastic-search is down" );
+    } else {
+        console.log( "elastic-search is ready" );
+    }
+} );
+let _fetchAll = function _fetchAll () {
+
+};
+
+_fetchAll.prototype[Symbol.asyncIterator] = async function* values () {
+    // first we do a search, and specify a scroll timeout
+    let {_scroll_id, hits} = await ESClient.search({
+        index: '_all',
+        // type: '*',
+        scroll: '30s',
+        body: {
+            query: {
+                "match_all": {}
+            },
+        }
+    });
+
+    this.scroll_id = _scroll_id;
+    this.hits = hits;
+
+    while(this.hits && this.hits.hits.length) {
+        yield {records: this.hits.hits, total: this.hits.total};
+
+        let { _scroll_id, hits } = await ESClient.scroll({
+            scrollId: this.scroll_id,
+            scroll: '30s'
+        });
+        this.scroll_id = _scroll_id;
+        this.hits = hits;
+    }
+}
+
+-------------------
+# JS
+-------------------
+private def streamFromScroll(scrollId: String) = {
+    ZStream.paginateChunkZIO(scrollId) { currentScrollId =>
+      for {
+        response    <- client.execute(searchScroll(currentScrollId).keepAlive(scrollKeepAlive))
+        nextScrollId = response.result.scrollId
+        results      = Chunk.fromArray(response.result.hits.hits.map(_.sourceAsString))  // TODO find a better way than just sourceAsString !
+        _           <- ZIO.log(s"Got ${results.size} more documents")
+      } yield results -> (if (results.size > 0) nextScrollId else None)
+    }
+  }
+
+  def fetchAll[T](indexPattern: String)(using JsonDecoder[T]) = {
+    val result = for {
+      response         <- client.execute(search(Index(indexPattern)).size(searchPageSize).scroll(scrollKeepAlive))
+      scrollId         <- ZIO.fromOption(response.result.scrollId)
+      firstResults      = Chunk.fromArray(response.result.hits.hits.map(_.sourceAsString)) // TODO find a better way than just sourceAsString !
+      _                <- ZIO.log(s"Got ${firstResults.size} first documents")
+      nextResultsStream = streamFromScroll(scrollId)
+    } yield ZStream.fromChunk(firstResults) ++ nextResultsStream
+
+    ZStream.unwrap(result).map(_.fromJson[T]).absolve.mapError(err => Exception(err.toString))
+  }
 
