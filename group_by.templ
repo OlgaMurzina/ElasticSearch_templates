@@ -1,0 +1,24 @@
+# шаблон общий
+{
+ *  "aggs": {
+ *    "field_1": {
+ *      "terms": {
+ *        "field": "field_1"
+ *      },
+ *      "aggs": {
+ *        "field_2": {
+ *          "terms": {
+ *            "field": "field_2.keyword"
+ *          }
+ *        },
+ *        "aggs": {
+ *          "field_2": {
+ *            "terms": {
+ *              "field": "field_2.keyword"
+ *            }
+ *          }
+ *        }
+ *      }
+ *    }
+ *  }
+ * }
