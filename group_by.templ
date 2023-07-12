@@ -1,4 +1,4 @@
-# шаблон общий
+# group by
 {
  *  "aggs": {
  *    "field_1": {
@@ -22,3 +22,415 @@
  *    }
  *  }
  * }
+
+# group by multiple
+GET <index>/<type>/_search
+{
+  "size": 0, 
+    "aggs": {
+        "duplicateNames": {
+            "terms": {
+                "field": "tax_property_id",
+                "min_doc_count": 2,
+                "size":100
+            },
+            "aggs":{
+              "legal_description":{
+                "terms": {
+                  "field": "legal_description",
+                  "size": 100,
+                  "min_doc_count": 2
+                }
+              }
+            }
+        }
+    }
+}
+
+# more examples group by
+GET players/_search
+{
+  "aggs": {
+    "by_gender": {
+      "terms": {
+        "field": "gender",
+        "size": 10
+      }
+    }
+  }
+}
+
+GET players/_search 
+{
+  "query": {
+    "match": {
+      "gender": "femal"
+    }
+  },
+  "aggs": {
+    "firstNameWithA": {
+      "significant_text": {
+        "field": "lastname"
+      }
+    }
+  }
+}
+
+GET ecommerce/_search
+{
+  "aggs": {
+    "sum_of_quantity_sold": {
+      "sum": {
+        "field": "Quantity"
+      }
+    }
+  }
+}
+
+GET ecommerce/_search
+{
+  "size": 0, 
+  "aggs": {
+    "sum_of_quantity_sold": {
+      "sum": {
+        "field": "Quantity"
+      }
+    }
+  }
+}
+GET ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "Lowest Unit Price": {
+      "min": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+GET ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "Max Unit Price": {
+      "max": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+GET ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "Ag Unit Price": {
+      "avg": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+GET ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "Unit Price Stats": {
+      "stats": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+  
+  
+}
+
+// Cardinality aggs computes the unique values for a given field
+GET ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "No of Unique Customers": {
+      "cardinality": {
+        "field": "CustomerID"
+      }
+    }
+  }
+}
+// limit aggs to only a country
+GET ecommerce/_search
+{
+  "query": {
+    "match": {
+      "Country": "Germany"
+    }
+  },
+  "aggs": {
+    "No of Unique Customers": {
+      "cardinality": {
+        "field": "CustomerID"
+      }
+    }
+  }
+}
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_by_8_hours": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "fixed_interval": "8h"
+      }
+    }
+  }
+}
+
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_by_8_hours": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "calendar_interval": "1M",
+        "order": {
+          "_key": "desc"
+        }
+      }
+    }
+  }
+}
+
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_per_price_interval": {
+      "histogram": {
+        "field": "UnitPrice",
+        "interval": "10",
+        "order": {
+          "_key": "desc"
+        }
+      }
+    }
+  }
+}
+
+// cannot sort it
+GET ecommerce_data/_search
+{
+   "size": 0,
+  "aggs": {
+    "transactions_per_custom_price_range": {
+      "range": {
+        "field": "UnitPrice",
+        "ranges": [
+          {
+            "to": 100
+          },
+          {
+            "from": 100,
+            "to": 200
+          },
+          {
+            "from": 200
+          }
+        ]
+      }
+    }
+  }
+}
+
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "top_5_customers": {
+      "terms": {
+        "field": "CustomerID",
+        "size": 5
+      }
+    }
+  }
+}
+
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "top_5_customers_with_lowest_transactions": {
+      "terms": {
+        "field": "CustomerID",
+        "size": 5,
+        "order": {
+          "_count": "asc"
+        }
+      }
+    }
+  }
+}
+
+GET /vehicles/cars/_search
+{
+  "aggs": {
+    "popular_cars" : { 
+      "terms" : {
+        "field" : "make.keyword"
+      },
+      "aggs" : {
+        "avg_price": {
+          "avg": {
+            "field" : "price"
+          }
+        }
+      }
+    }
+  },
+  "sort" :[  
+    ]
+  }
+
+GET /vehicles/cars/_search
+{
+  "query" :{
+    "match": {"color": "red"}
+  },
+  "aggs": {
+    "popular_cars" : { 
+      "terms" : {
+        "field" : "make.keyword"
+      },
+      "aggs" : {
+        "avg_price": {
+          "avg": {
+            "field" : "price"
+          }
+        },
+        "max_price": {
+          "max": {
+            "field" : "price"
+          }
+        },
+       "min_price": {
+          "min": {
+            "field" : "price"
+          }
+        }
+      }
+    }
+  }
+}
+
+GET /vehicles/cars/_search
+{
+  "size": 0,
+  "query" :{
+    "match": {"color": "red"}
+  },
+  "aggs": {
+    "popular_cars" : { 
+      "terms" : {
+        "field" : "make.keyword"
+        
+      },
+      "aggs" : {
+        "sold_date_ranges": {
+          
+          "range": {
+            "field" : "sold",
+            "ranges": [
+              { "from" : "2016-01-01", "to": "2016-05-18" },
+              { "from" : "2016-05-08", "to": "2017-01-01" }
+              ]
+          },
+        
+        "aggs" :{
+          "avg_price" :{
+            "avg" : {
+              "field": "price"
+            }
+          }
+          
+        }
+        }
+      }
+    }
+  }
+}
+
+GET /vehicles/cars/_search
+{
+  "size": 0,
+  "query" :{
+    "match": {"color": "red"}
+  },
+  "aggs": {
+    "popular_cars" : { 
+      "terms" : {
+        "field" : "make.keyword",
+        "order": {"avg_price": "desc"}
+        
+      },
+  
+        "aggs" :{
+          "avg_price" :{
+            "avg" : {
+              "field": "price"
+            }
+          }
+        }
+    }
+  }
+}
+
+GET /../_search
+{
+    "aggregations": {
+        "events": {
+            "terms": {"field": "countryName"},
+            "aggregations": {
+                "significantArist": {
+                    "significant_terms": {"field": "title"}
+                }
+            }
+        }
+    }
+}'
+
+
+# number of countries 
+GET /../_search
+{
+    "aggs" : {
+        "countryCount" : {
+            "cardinality" : {
+                "field" : "countryName"
+            }
+        }
+    }
+}
+
+# all events by countries
+GET /../_search
+{
+    "aggs" : {
+        "countries" : {
+            "terms" : { "field" : "countryName" }
+        }
+    }
+}'
+
+GET /../_search
+{
+    "query" : {
+        "terms" : {"user_id" : [ ID ]}
+    },
+    "aggregations" : {
+        "significantArtists" : {
+            "significant_terms" : { "field" : "terms" }
+        }
+    }
+}
