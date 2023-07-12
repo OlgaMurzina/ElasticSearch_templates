@@ -434,3 +434,50 @@ GET /../_search
         }
     }
 }
+
+#
+query = {
+    "size": 0,
+    "query": {
+        "geo_shape":{
+            "geometry":{
+                "indexed_shape":{
+                        "index": shape_index,
+                        "type": "polygon",
+                        "id": shape_id,
+                        "path": "geo_area"
+                },
+                "relation": "within"
+            }
+        }
+    },
+    "aggs": {
+            "location": {
+                "terms": {
+                    "field": "properties.location",
+                    "size": 500
+                    },
+            "aggs":{
+                "dates": {
+                        "date_histogram": {
+                            "field": "properties.value_date",
+                            "interval": "1s",
+                            "time_zone": "UTC",
+                            "min_doc_count": 1
+                            },
+
+            "aggs": {
+                "volumeAgg": {
+                    "sum": {
+                        "field": "properties.value_volume"
+                        }
+                    },
+                "capacityAgg": {
+                    "sum": {
+                        "field": "properties.value_capacity"
+                        }
+                    }
+                }}}
+            }
+    }
+}
