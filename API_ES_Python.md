@@ -1,6 +1,6 @@
-#API Elasticsearch.py
-##class elasticsearch.Elasticsearch
-###Атрибуты класса:
+# API Elasticsearch.py
+## class elasticsearch.Elasticsearch
+### Атрибуты класса:
 
 * hosts=None,
 * transport_class=<class 'elasticsearch.transport.Transport'>,
@@ -10,9 +10,9 @@ https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch
 
 Низкоуровневый клиент Elasticsearch. Обеспечивает прямое сопоставление Python с конечными точками ES REST.  
 
-###Методы класса:
+### Mетоды класса:
 
-####count(body=None, index=None, params=None, headers=None) - метод возвращеает количество документов в индексе согласно запросу -> int
+#### count(body=None, index=None, params=None, headers=None) - метод возвращеает количество документов в индексе согласно запросу -> int
 * body – запрос, написанный на Query DSL (необязательная опция)
 * index – список индексов, разделенных запятыми, для ограничения результатов
 * analyze_wildcard – указание, следует ли анализировать запросы с подстановочными знаками и префиксами (по умолчанию: false)
@@ -26,7 +26,7 @@ https://elasticsearch-py.readthedocs.io/en/master/api.html#elasticsearch
 * preference – укажите узел или сегмент, на котором должна быть выполнена операция (по умолчанию: случайный)
 * q – запрос в синтаксисе строки запроса Lucene
 * terminate_after – максимальное количество для каждого шарда, при достижении которого выполнение запроса будет прекращено досрочно  
-####create(index, id, body, doc_type=None, params=None, headers=None) - метод создает новый документ в индексе. Возвращает ответ 409, когда документ с таким же идентификатором уже существует в индексе
+#### create(index, id, body, doc_type=None, params=None, headers=None) - метод создает новый документ в индексе. Возвращает ответ 409, когда документ с таким же идентификатором уже существует в индексе
 
 * index – имя индекса
 * id – ID документа 
