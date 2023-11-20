@@ -1,3 +1,5 @@
+Данная сборка предназначена для изучения API Elasticsearch
+
 # API Elasticsearch.py
 ## class elasticsearch.Elasticsearch
 ### Атрибуты класса:
